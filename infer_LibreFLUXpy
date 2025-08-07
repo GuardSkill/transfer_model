@@ -1,0 +1,57 @@
+# ! pip install diffusers==0.30.3
+import torch
+from diffusers import DiffusionPipeline
+
+LibreFLUX_pipeline_path="jimmycarter/LibreFLUX"
+model_path="jimmycarter/LibreFLUX"
+
+pipe = DiffusionPipeline.from_pretrained(
+    "jimmycarter/LibreFLUX",
+    custom_pipeline="jimmycarter/LibreFLUX",
+    use_safetensors=True,
+    torch_dtype=torch.bfloat16,
+    trust_remote_code=True,
+)
+
+# High VRAM
+prompt = "Photograph of a chalk board on which is written: 'I thought what I'd do was, I'd pretend I was one of those deaf-mutes.'"
+negative_prompt = "blurry"
+images = pipe(
+  prompt=prompt,
+  negative_prompt=negative_prompt,
+  return_dict=False,
+  # guidance_scale=3.5,
+  # num_inference_steps=28,
+  # generator=torch.Generator().manual_seed(42),
+  # no_cfg_until_timestep=0,
+)
+images[0][0].save('chalkboard.png')
+
+# If you have <=24 GB VRAM, try:
+# ! pip install optimum-quanto
+# Then
+from optimum.quanto import freeze, quantize, qint8
+# quantize and freeze will take a short amount of time, so be patient.
+quantize(
+    pipe.transformer,
+    weights=qint8,
+    exclude=[
+        "*.norm", "*.norm1", "*.norm2", "*.norm2_context",
+        "proj_out", "x_embedder", "norm_out", "context_embedder",
+    ],
+)
+freeze(pipe.transformer)
+pipe.enable_model_cpu_offload()
+
+images = pipe(
+  prompt=prompt,
+  negative_prompt=negative_prompt,
+  device=None,
+  return_dict=False,
+  do_batch_cfg=False, # https://github.com/huggingface/optimum-quanto/issues/327
+  # guidance_scale=3.5,
+  # num_inference_steps=28,
+  # generator=torch.Generator().manual_seed(42),
+  # no_cfg_until_timestep=0,
+)
+images[0][0].save('chalkboard.png')
